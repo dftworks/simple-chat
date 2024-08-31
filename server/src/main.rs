@@ -47,7 +47,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
 
             // Notify all users about the new user
             let welcome_message = ChatMessage {
-                username: "Server".to_string(),
+                username: "Host".to_string(),
                 content: format!("{} has joined the chat!", username),
             };
 
