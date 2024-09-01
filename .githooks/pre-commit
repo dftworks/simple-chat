@@ -1,0 +1,35 @@
+#!/bin/bash
+
+# Run rustfmt to format code
+echo "Running rustfmt..."
+cargo fmt -- --check
+FMT_STATUS=$?
+
+if [ $FMT_STATUS -ne 0 ]; then
+  echo "Code is not formatted. Please run 'cargo fmt' to format the code."
+  exit 1
+fi
+
+# Run clippy to check for warnings and errors
+echo "Running clippy..."
+cargo clippy -- -D warnings
+CLIPPY_STATUS=$?
+
+if [ $CLIPPY_STATUS -ne 0 ]; then
+  echo "Clippy found warnings or errors."
+  exit 1
+fi
+
+# Compile the project to ensure there are no errors
+echo "Compiling the project..."
+cargo build
+BUILD_STATUS=$?
+
+if [ $BUILD_STATUS -ne 0 ]; then
+  echo "Build failed."
+  exit 1
+fi
+
+echo "All checks passed. Ready to commit."
+exit 0
+
