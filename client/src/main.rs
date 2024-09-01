@@ -1,13 +1,16 @@
 use futures::sink::SinkExt;
 use futures::stream::StreamExt;
+use std::sync::Arc;
 use std::{
     env,
     io::{self},
 };
-
-use std::io::Write;
+use tokio::sync::Notify;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 use url::Url;
+
+use futures::FutureExt;
+use std::io::Write;
 
 use types::ChatMessage;
 
@@ -44,20 +47,24 @@ async fn main() {
         .await
         .expect("Failed to send username");
 
-    // Clone the WebSocket stream for reading and writing
+    // Split the WebSocket stream into read and write halves
     let (mut write, mut read) = ws_stream.split();
 
+    // Notify to signal when the client should shut down
+    let shutdown_notify = Arc::new(Notify::new());
+    let shutdown_notify_clone = Arc::clone(&shutdown_notify);
+
     // Task to read messages from the server and print them
-    tokio::spawn(async move {
+    let read_task = tokio::spawn(async move {
         while let Some(Ok(message)) = read.next().await {
             match message {
                 Message::Text(text) => {
                     let chat_msg: ChatMessage = serde_json::from_str(&text).unwrap();
                     println!("\n{}", chat_msg);
                 }
-
                 Message::Close(_) => {
                     println!("Connection closed by the server.");
+                    shutdown_notify_clone.notify_one();
                     break;
                 }
                 _ => {}
@@ -66,33 +73,49 @@ async fn main() {
         }
     });
 
-    // Interactive command prompt for user input
-    let stdin = io::stdin();
-    loop {
-        print_prompt();
+    // Task to handle user input and sending messages
+    let input_task = tokio::spawn(async move {
+        let stdin = io::stdin();
+        loop {
+            print_prompt();
 
-        let mut input = String::new();
-        stdin.read_line(&mut input).expect("Failed to read input");
-        let input = input.trim();
+            let mut input = String::new();
+            stdin.read_line(&mut input).expect("Failed to read input");
+            let input = input.trim();
 
-        if input.to_lowercase() == "leave" {
-            println!("Disconnecting from the server...");
-            write.close().await.expect("Failed to close connection");
-            break;
-        } else if input.starts_with("send ") {
-            let message = input[5..].trim();
-            if !message.is_empty() {
-                write
-                    .send(Message::Text(message.to_string()))
-                    .await
-                    .expect("Failed to send message to the server");
+            if input.to_lowercase() == "leave" {
+                println!("Disconnecting from the server...");
+                let _ = write.close().await;
+                break;
+            } else if input.starts_with("send ") {
+                let message = input[5..].trim();
+                if !message.is_empty() {
+                    if let Err(e) = write.send(Message::Text(message.to_string())).await {
+                        println!("Failed to send message to the server: {}", e);
+                        break;
+                    }
+                }
+            } else if input.is_empty() {
+		
+	    }
+	    else {
+                println!(
+                    "Unknown command. Use 'send <message>' to send a message or 'leave' to disconnect."
+                );
             }
-        } else {
-            println!(
-                "Unknown command. Use 'send <message>' to send a message or 'leave' to disconnect."
-            );
+
+            // Check if the shutdown signal has been received
+            if shutdown_notify.notified().now_or_never().is_some() {
+                println!("Shutting down client...");
+                break;
+            }
         }
-    }
+    });
+
+    // Wait for both tasks to complete
+    let _ = tokio::join!(read_task, input_task);
+
+    println!("Client has shut down.");
 }
 
 fn print_prompt() {

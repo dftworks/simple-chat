@@ -31,13 +31,44 @@ async fn websocket_handler(
 // Handle a WebSocket connection
 async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     let (mut ws_sender, mut ws_receiver) = socket.split();
-    let mut username = String::new();
+
     let mut bc_receiver = state.sender.subscribe(); // Subscribe to broadcast channel
+
+    let mut username = String::new();
 
     // Receive the first message, which should contain the username
     if let Some(Ok(msg)) = ws_receiver.next().await {
         if let Message::Text(name) = msg {
             username = name.trim().to_string();
+
+            // Check if the username is already taken
+            let mut clients = state.clients.lock().await;
+
+            if clients.contains(&username) {
+                // If username is taken, send an error message and close the connection
+                let error_message = ChatMessage::new(
+                    "Host",
+                    &format!(
+                        "Username '{}' is already taken. Please choose a different one.",
+                        username
+                    ),
+                );
+                let _ = ws_sender
+                    .send(Message::Text(
+                        serde_json::to_string(&error_message).unwrap(),
+                    ))
+                    .await;
+
+                // Send a close signal to the client
+                let _ = ws_sender.send(Message::Close(None)).await;
+
+                println!("Rejected user '{}' due to duplicate username.", username);
+
+                return; // Exit the function to terminate the connection
+            }
+
+            // If username is unique, add it to the set of clients
+            clients.insert(username.clone());
             println!("User '{}' joined the chat", username);
 
             // Notify all users about the new user
@@ -46,16 +77,14 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
 
             // Broadcast the join message
             state.sender.send(welcome_message.clone()).unwrap();
-
-            // Store client sender to handle disconnects (if needed)
-            let mut clients = state.clients.lock().await;
-            clients.insert(username.clone());
         }
     }
 
     // Main loop to handle incoming and outgoing messages
+
     loop {
         tokio::select! {
+
             // Handle incoming WebSocket messages
          result = ws_receiver.next() => {
                 match result {
