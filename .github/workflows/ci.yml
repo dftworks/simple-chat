@@ -1,0 +1,62 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      chat_server:
+        image: rust:latest
+        ports:
+          - 3000:3000
+        options: >-
+          --network host
+        steps:
+          - name: Check out repository
+            uses: actions/checkout@v3
+
+          - name: Install dependencies
+            run: |
+              apt-get update
+              apt-get install -y libssl-dev pkg-config
+              
+          - name: Build server
+            run: cargo build --bin server
+
+          - name: Run chat server
+            run: cargo run --bin server &
+            env:
+              RUST_LOG: debug
+
+          - name: Wait for server to start
+            run: sleep 5
+
+          - name: Run client and send message
+            run: |
+              cargo run --bin client 127.0.0.1 3000 testuser &
+              sleep 2
+              echo -e "send Hello, server!\nleave" | nc localhost 3000
+
+          - name: Check client exit code
+            if: failure()
+            run: exit 1
+
+          - name: Ensure server and client did not exit with failure
+            run: |
+              echo "Checking server logs for errors..."
+              if grep -q "error" <(docker logs $(docker ps -q --filter ancestor=rust:latest)); then
+                echo "Server encountered an error."
+                exit 1
+              fi
+
+          - name: Kill server
+            run: killall server
+
