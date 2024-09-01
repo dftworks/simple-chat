@@ -17,8 +17,6 @@ jobs:
         image: rust:latest
         ports:
           - 3000:3000
-        options: >-
-          --network host
 
     steps:
       - name: Check out repository
@@ -55,3 +53,4 @@ jobs:
             echo "Server encountered an error."
             exit 1
           fi
+
