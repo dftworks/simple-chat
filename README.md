@@ -1,3 +1,12 @@
+To use the shared pre-commit hook, each team member needs to run the following command in their local repository:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+This command tells Git to use the hooks in the .githooks directory of the repository instead of the default .git/hooks directory.
+
+
 # Simple Chat
 
 ## Summary
