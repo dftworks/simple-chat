@@ -9,16 +9,11 @@ use axum::{
 };
 use futures::sink::SinkExt;
 use futures::stream::StreamExt;
-use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
-use std::sync::{Arc, Mutex};
-use tokio::sync::broadcast;
+use std::sync::Arc;
+use tokio::sync::{broadcast, Mutex};
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-struct ChatMessage {
-    username: String,
-    content: String,
-}
+use types::ChatMessage;
 
 struct AppState {
     clients: Mutex<HashSet<String>>,
@@ -46,16 +41,14 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
             println!("User '{}' joined the chat", username);
 
             // Notify all users about the new user
-            let welcome_message = ChatMessage {
-                username: "Host".to_string(),
-                content: format!("{} has joined the chat!", username),
-            };
+            let welcome_message =
+                ChatMessage::new("Host", &format!("{} has joined the chat!", username));
 
             // Broadcast the join message
             state.sender.send(welcome_message.clone()).unwrap();
 
             // Store client sender to handle disconnects (if needed)
-            let mut clients = state.clients.lock().unwrap();
+            let mut clients = state.clients.lock().await;
             clients.insert(username.clone());
         }
     }
@@ -68,10 +61,10 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
                 match result {
                     Some(Ok(msg)) => {
                         if let Message::Text(text) = msg {
-                            let chat_msg = ChatMessage {
-                                username: username.clone(),
-                                content: text.clone(),
-                            };
+                            let chat_msg = ChatMessage::new(
+                                &username,
+                                &text
+                            );
 
                             // Broadcast the message to all clients
                             if state.sender.send(chat_msg.clone()).is_err() {
@@ -94,7 +87,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
 
             // Handle outgoing WebSocket messages
             Ok(chat_msg) = bc_receiver.recv() => {
-                if chat_msg.username != username {
+                if chat_msg.get_username() != username {
                     let msg_text = serde_json::to_string(&chat_msg).unwrap();
                     if ws_sender.send(Message::Text(msg_text)).await.is_err() {
                         break; // If sending fails, break the loop to close the connection
@@ -105,7 +98,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     }
 
     // Cleanup: Remove the client from the state
-    let mut clients = state.clients.lock().unwrap();
+    let mut clients = state.clients.lock().await;
     clients.remove(&username);
     println!("User '{}' left the chat", username);
 }

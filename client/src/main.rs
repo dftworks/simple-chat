@@ -1,13 +1,15 @@
-use futures_util::{SinkExt, StreamExt};
+use futures::sink::SinkExt;
+use futures::stream::StreamExt;
 use std::{
     env,
-    io::{self, BufRead},
+    io::{self},
 };
-use tokio::net::TcpStream;
-use tokio_tungstenite::{
-    connect_async, tungstenite::protocol::Message, MaybeTlsStream, WebSocketStream,
-};
+
+use std::io::Write;
+use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 use url::Url;
+
+use types::ChatMessage;
 
 #[tokio::main]
 async fn main() {
@@ -27,7 +29,7 @@ async fn main() {
     let url = Url::parse(&server_url).expect("Invalid WebSocket URL");
 
     // Connect to the WebSocket server
-    let (mut ws_stream, _) = connect_async(url)
+    let (mut ws_stream, _) = connect_async(url.to_string())
         .await
         .expect("Failed to connect to the WebSocket server");
 
@@ -49,23 +51,51 @@ async fn main() {
     tokio::spawn(async move {
         while let Some(Ok(message)) = read.next().await {
             match message {
-                Message::Text(text) => println!("Received: {}", text),
+                Message::Text(text) => {
+                    let chat_msg: ChatMessage = serde_json::from_str(&text).unwrap();
+                    println!("\n{}", chat_msg);
+                }
+
                 Message::Close(_) => {
                     println!("Connection closed by the server.");
                     break;
                 }
                 _ => {}
             }
+            print_prompt(); // Display prompt again after receiving a message
         }
     });
 
-    // Read user input from the console and send it to the server
+    // Interactive command prompt for user input
     let stdin = io::stdin();
-    for line in stdin.lock().lines() {
-        let line = line.expect("Failed to read line from stdin");
-        write
-            .send(Message::Text(line))
-            .await
-            .expect("Failed to send message to the server");
+    loop {
+        print_prompt();
+
+        let mut input = String::new();
+        stdin.read_line(&mut input).expect("Failed to read input");
+        let input = input.trim();
+
+        if input.to_lowercase() == "leave" {
+            println!("Disconnecting from the server...");
+            write.close().await.expect("Failed to close connection");
+            break;
+        } else if input.starts_with("send ") {
+            let message = input[5..].trim();
+            if !message.is_empty() {
+                write
+                    .send(Message::Text(message.to_string()))
+                    .await
+                    .expect("Failed to send message to the server");
+            }
+        } else {
+            println!(
+                "Unknown command. Use 'send <message>' to send a message or 'leave' to disconnect."
+            );
+        }
     }
+}
+
+fn print_prompt() {
+    print!("> ");
+    io::stdout().flush().unwrap();
 }
