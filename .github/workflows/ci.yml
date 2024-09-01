@@ -17,46 +17,40 @@ jobs:
         image: rust:latest
         ports:
           - 3000:3000
-        options: >-
-          --network host
-        steps:
-          - name: Check out repository
-            uses: actions/checkout@v3
 
-          - name: Install dependencies
-            run: |
-              apt-get update
-              apt-get install -y libssl-dev pkg-config
-              
-          - name: Build server
-            run: cargo build --bin server
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v3
 
-          - name: Run chat server
-            run: cargo run --bin server &
-            env:
-              RUST_LOG: debug
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
 
-          - name: Wait for server to start
-            run: sleep 5
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libssl-dev pkg-config
 
-          - name: Run client and send message
-            run: |
-              cargo run --bin client 127.0.0.1 3000 testuser &
-              sleep 2
-              echo -e "send Hello, server!\nleave" | nc localhost 3000
+      - name: Build server
+        run: cargo build --bin server
 
-          - name: Check client exit code
-            if: failure()
-            run: exit 1
+      - name: Run chat server
+        run: |
+          cargo run --bin server &
+          sleep 5 # Wait for the server to start
 
-          - name: Ensure server and client did not exit with failure
-            run: |
-              echo "Checking server logs for errors..."
-              if grep -q "error" <(docker logs $(docker ps -q --filter ancestor=rust:latest)); then
-                echo "Server encountered an error."
-                exit 1
-              fi
+      - name: Run client and send message
+        run: |
+          echo "Connecting client and sending message..."
+          echo -e "send Hello, server!\nleave" | cargo run --bin client 127.0.0.1 3000 testuser
 
-          - name: Kill server
-            run: killall server
+      - name: Ensure no errors
+        run: |
+          echo "Check logs for errors"
+          if grep -q "error" server.log; then
+            echo "Server encountered an error."
+            exit 1
+          fi
 
