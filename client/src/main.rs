@@ -87,8 +87,8 @@ async fn main() {
                 println!("Disconnecting from the server...");
                 let _ = write.close().await;
                 break;
-            } else if input.starts_with("send ") {
-                let message = input[5..].trim();
+            } else if let Some(stripped) = input.strip_prefix("send ") {
+                let message = stripped.trim();
                 if !message.is_empty() {
                     if let Err(e) = write.send(Message::Text(message.to_string())).await {
                         println!("Failed to send message to the server: {}", e);
@@ -96,9 +96,7 @@ async fn main() {
                     }
                 }
             } else if input.is_empty() {
-		
-	    }
-	    else {
+            } else {
                 println!(
                     "Unknown command. Use 'send <message>' to send a message or 'leave' to disconnect."
                 );
