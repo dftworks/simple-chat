@@ -12,12 +12,6 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
 
-    services:
-      chat_server:
-        image: rust:latest
-        ports:
-          - 3000:3000
-
     steps:
       - name: Check out repository
         uses: actions/checkout@v3
@@ -33,12 +27,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libssl-dev pkg-config
 
-      - name: Build server
-        run: cargo build --bin server
+      - name: Build server and client
+        run: cargo build --bin server --bin client
 
       - name: Run chat server
         run: |
-          cargo run --bin server &
+          cargo run --bin server > server.log 2>&1 &
           sleep 5 # Wait for the server to start
 
       - name: Run client and send message
@@ -46,11 +40,16 @@ jobs:
           echo "Connecting client and sending message..."
           echo -e "send Hello, server!\nleave" | cargo run --bin client 127.0.0.1 3000 testuser
 
-      - name: Ensure no errors
+      - name: Ensure no errors in server logs
         run: |
-          echo "Check logs for errors"
+          echo "Checking server logs for errors..."
           if grep -q "error" server.log; then
             echo "Server encountered an error."
             exit 1
+          else
+            echo "No errors found in server logs."
           fi
 
+      - name: Display server logs
+        if: failure()
+        run: cat server.log
