@@ -37,7 +37,7 @@ jobs:
       - name: Run client and send message
         run: |
           echo "Connecting client and sending message..."
-          echo -e "send Hello, server!\nleave" | cargo run --bin client 127.0.0.1 3000 testuser
+          echo -e "send Hello, server!\nleave" | cargo run --bin client 127.0.0.1 3000 testuser > client.log 2>&1
 
       - name: Ensure no errors in server logs
         run: |
@@ -52,3 +52,17 @@ jobs:
       - name: Display server logs
         if: failure()
         run: cat server.log
+
+      - name: Ensure no errors in client logs
+        run: |
+          echo "Checking client logs for errors..."
+          if grep -q "error" client.log; then
+            echo "Client encountered an error."
+            exit 1
+          else
+            echo "No errors found in client logs."
+          fi
+
+      - name: Display client logs
+        if: failure()
+        run: cat client.log
