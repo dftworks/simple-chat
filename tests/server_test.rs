@@ -1,15 +1,15 @@
 // server/tests/server_test.rs
 
-use tokio::process::Command; // Use tokio's Command, not std
-use tokio::time::{sleep, Duration};
 use tokio::net::TcpStream;
 use tokio::process::Child;
+use tokio::process::Command; // Use tokio's Command, not std
+use tokio::time::{sleep, Duration};
 
 async fn start_server() -> Child {
     // Spawn the server using tokio's async Command
     let server_process = Command::new("cargo")
         .args(&["run", "--bin", "server"])
-        .current_dir("../")  // Ensure that it runs from the workspace root
+        .current_dir("../") // Ensure that it runs from the workspace root
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()
@@ -31,9 +31,11 @@ async fn test_server_starts() {
     let mut server = start_server().await;
 
     // Check if the server is accepting connections
-    assert!(check_server_connection(3000).await, "Server failed to start");
+    assert!(
+        check_server_connection(3000).await,
+        "Server failed to start"
+    );
 
     // Kill the server after the test
     server.kill().await.expect("Failed to stop the server");
 }
-
