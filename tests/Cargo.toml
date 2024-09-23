@@ -1,0 +1,21 @@
+[package]
+name = "tests"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+types = { path = "../types" }
+tokio = { workspace = true }
+axum = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+futures = { workspace = true }
+
+[[test]]
+name = "client_test"
+path = "client_test.rs"
+
+[[test]]
+name = "server_test"
+path = "server_test.rs"

@@ -17,4 +17,4 @@ url = "2.4.0"
 
 [workspace]
 resolver = "2"
-members = [ "types", "server", "client"]
+members = [ "types", "server", "client", "tests" ]
